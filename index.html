@@ -267,20 +267,34 @@
 
     function renderReceipt(b) {
       const cur = b.cu || '₹';
-      const dateFormatted = b.d ? new Date(b.d).toLocaleString() : '';
+      const dateFormatted = b.d ? (b.d.includes('T') ? new Date(b.d).toLocaleString() : b.d) : '';
       
       let itemsHtml = '';
       (b.i || []).forEach((item, idx) => {
-        const discText = (item.d && item.d > 0) ? `<div style="font-size: 11px; color: #10B981;">-${cur}${item.d.toFixed(2)} off</div>` : '';
+        let name, qty, rate, total, disc = 0, unit = 'pcs';
+        if (Array.isArray(item)) {
+          name = item[0];
+          qty = item[1];
+          rate = item[2];
+          total = item[3];
+        } else {
+          name = item.n;
+          qty = item.q;
+          rate = item.r;
+          total = item.t;
+          disc = item.d || 0;
+          unit = item.u || 'pcs';
+        }
+        const discText = disc > 0 ? `<div style="font-size: 11px; color: #10B981;">-${cur}${disc.toFixed(2)} off</div>` : '';
         itemsHtml += `
           <tr>
             <td>
-              <div style="font-weight: 600;">${item.n}</div>
-              <div style="font-size: 11px; color: var(--muted);">${cur}${Number(item.r).toFixed(2)} x ${item.q} ${item.u || 'pcs'}</div>
+              <div style="font-weight: 600;">${name}</div>
+              <div style="font-size: 11px; color: var(--muted);">${cur}${Number(rate).toFixed(2)} x ${qty} ${unit}</div>
               ${discText}
             </td>
             <td class="text-right" style="font-weight: 600;">
-              ${cur}${Number(item.t).toFixed(2)}
+              ${cur}${Number(total).toFixed(2)}
             </td>
           </tr>
         `;
