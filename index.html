@@ -269,6 +269,7 @@
       const cur = b.cu || '₹';
       const dateFormatted = b.d ? (b.d.includes('T') ? new Date(b.d).toLocaleString() : b.d) : '';
       
+      let computedSubtotal = 0;
       let itemsHtml = '';
       (b.i || []).forEach((item, idx) => {
         let name, qty, rate, total, disc = 0, unit = 'pcs';
@@ -285,6 +286,7 @@
           disc = item.d || 0;
           unit = item.u || 'pcs';
         }
+        computedSubtotal += Number(total || 0);
         const discText = disc > 0 ? `<div style="font-size: 11px; color: #10B981;">-${cur}${disc.toFixed(2)} off</div>` : '';
         itemsHtml += `
           <tr>
@@ -299,6 +301,9 @@
           </tr>
         `;
       });
+
+      const subtotal = b.st !== undefined && b.st !== null ? Number(b.st) : computedSubtotal;
+      const grandTotal = b.t !== undefined && b.t !== null ? Number(b.t) : (b.gt !== undefined && b.gt !== null ? Number(b.gt) : (subtotal - Number(b.dc || 0)));
 
       const customerHtml = b.c ? `
         <div class="meta-col">
@@ -351,7 +356,7 @@
           <div class="totals-section">
             <div class="total-row">
               <span>Items Subtotal</span>
-              <span>${cur}${Number(b.st || 0).toFixed(2)}</span>
+              <span>${cur}${subtotal.toFixed(2)}</span>
             </div>
             ${b.dc && b.dc > 0 ? `
               <div class="total-row" style="color: #10B981; font-weight: 600;">
@@ -367,7 +372,7 @@
             ` : ''}
             <div class="grand-total-row">
               <span>Grand Total</span>
-              <span>${cur}${Number(b.gt || 0).toFixed(2)}</span>
+              <span>${cur}${grandTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -414,8 +419,14 @@
 
     function shareWhatsApp() {
       if (!currentBillData) return;
+      const b = currentBillData;
+      let totalAmount = b.t !== undefined && b.t !== null ? b.t : (b.gt !== undefined && b.gt !== null ? b.gt : '');
+      if (!totalAmount && Array.isArray(b.i)) {
+        totalAmount = b.i.reduce((sum, item) => sum + (Array.isArray(item) ? Number(item[3] || 0) : Number(item.t || 0)), 0);
+      }
+      const formattedTotal = Number(totalAmount).toFixed(2);
       const text = encodeURIComponent(
-        `Hello! Here is your digital receipt for Invoice #${currentBillData.b} from ${currentBillData.s} for total amount ${currentBillData.cu || '₹'}${currentBillData.gt}.\n\nView E-Bill: ${window.location.href}`
+        `Hello! Here is your digital receipt for Invoice #${b.b} from ${b.s} for total amount ${b.cu || '₹'}${formattedTotal}.\n\nView E-Bill: ${window.location.href}`
       );
       window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
     }
