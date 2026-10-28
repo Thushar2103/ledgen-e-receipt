@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital E-Receipt</title>
+  <!-- Pako for fast, zero-dependency browser zlib/inflate decompression -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <!-- html2pdf for instant PDF download -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-hover: #4338CA;
+      --bg: #F3F4F6;
+      --card: #FFFFFF;
+      --text: #1F2937;
+      --muted: #6B7280;
+      --border: #E5E7EB;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px 12px;
+    }
+    .actions-bar {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-whatsapp {
+      background: #25D366;
+      color: #fff;
+    }
+    .btn-whatsapp:hover {
+      background: #20BD5A;
+    }
+    .receipt-card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+      padding: 24px;
+      position: relative;
+    }
+    .receipt-header {
+      text-align: center;
+      padding-bottom: 16px;
+      border-bottom: 2px dashed var(--border);
+    }
+    .store-name {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+    .store-sub {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .bill-meta {
+      display: flex;
+      justify-content: space-between;
+      margin: 16px 0 12px;
+      font-size: 13px;
+    }
+    .meta-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .meta-label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .meta-value {
+      font-weight: 600;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    .items-table th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .items-table td {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .text-right {
+      text-align: right !important;
+    }
+    .text-center {
+      text-align: center !important;
+    }
+    .totals-section {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+    }
+    .grand-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      margin-top: 6px;
+      border-top: 2px solid var(--text);
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .receipt-footer {
+      text-align: center;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 2px dashed var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .badge-paid {
+      background: #DEF7EC;
+      color: #03543F;
+    }
+    .error-card {
+      background: #FDF2F2;
+      color: #9B1C1C;
+      border: 1px solid #F8B4B4;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 480px;
+      text-align: center;
+      margin-top: 40px;
+    }
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+      .actions-bar {
+        display: none !important;
+      }
+      .receipt-card {
+        box-shadow: none;
+        max-width: 100%;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="actionsBar" class="actions-bar" style="display: none;">
+    <button class="btn btn-primary" onclick="downloadPdf()">
+      📥 Download PDF
+    </button>
+    <button class="btn btn-whatsapp" onclick="shareWhatsApp()">
+      💬 Share on WhatsApp
+    </button>
+  </div>
+
+  <div id="receiptContainer"></div>
+
+  <script>
+    let currentBillData = null;
+
+    function base64UrlToUint8Array(b64url) {
+      let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) {
+        b64 += '=';
+      }
+      const raw = window.atob(b64);
+      const output = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; ++i) {
+        output[i] = raw.charCodeAt(i);
+      }
+      return output;
+    }
+
+    function parseBillData() {
+      try {
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
+        let encodedData = '';
+
+        if (hash.includes('data=')) {
+          encodedData = hash.split('data=')[1].split('&')[0];
+        } else if (search.includes('b=')) {
+          const params = new URLSearchParams(search);
+          encodedData = params.get('b');
+        }
+
+        if (!encodedData) {
+          throw new Error('No receipt parameters found in URL.');
+        }
+
+        const compressed = base64UrlToUint8Array(encodedData);
+        const decompressed = pako.inflate(compressed, { to: 'string' });
+        return JSON.parse(decompressed);
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+    }
+
+    function renderReceipt(b) {
+      const cur = b.cu || '₹';
+      const dateFormatted = b.d ? new Date(b.d).toLocaleString() : '';
+      
+      let itemsHtml = '';
+      (b.i || []).forEach((item, idx) => {
+        const discText = (item.d && item.d > 0) ? `<div style="font-size: 11px; color: #10B981;">-${cur}${item.d.toFixed(2)} off</div>` : '';
+        itemsHtml += `
+          <tr>
+            <td>
+              <div style="font-weight: 600;">${item.n}</div>
+              <div style="font-size: 11px; color: var(--muted);">${cur}${Number(item.r).toFixed(2)} x ${item.q} ${item.u || 'pcs'}</div>
+              ${discText}
+            </td>
+            <td class="text-right" style="font-weight: 600;">
+              ${cur}${Number(item.t).toFixed(2)}
+            </td>
+          </tr>
+        `;
+      });
+
+      const customerHtml = b.c ? `
+        <div class="meta-col">
+          <span class="meta-label">Customer</span>
+          <span class="meta-value">${b.c} ${b.cp ? '(' + b.cp + ')' : ''}</span>
+        </div>
+      ` : '';
+
+      return `
+        <div id="receiptPdf" class="receipt-card">
+          <div class="receipt-header">
+            <h1 class="store-name">${b.s}</h1>
+            ${b.a1 ? `<div class="store-sub">${b.a1}</div>` : ''}
+            ${b.a2 ? `<div class="store-sub">${b.a2}</div>` : ''}
+            ${b.p ? `<div class="store-sub">Phone: ${b.p}</div>` : ''}
+            ${b.g ? `<div class="store-sub">GSTIN: ${b.g}</div>` : ''}
+          </div>
+
+          <div class="bill-meta">
+            <div class="meta-col">
+              <span class="meta-label">Invoice No</span>
+              <span class="meta-value">#${b.b}</span>
+            </div>
+            <div class="meta-col text-right">
+              <span class="meta-label">Date & Time</span>
+              <span class="meta-value">${dateFormatted}</span>
+            </div>
+          </div>
+
+          <div class="bill-meta" style="margin-top: 0;">
+            ${customerHtml}
+            <div class="meta-col text-right">
+              <span class="meta-label">Payment</span>
+              <div><span class="badge badge-paid">${b.pm || 'Paid'}</span></div>
+            </div>
+          </div>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Item & Details</th>
+                <th class="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="totals-section">
+            <div class="total-row">
+              <span>Items Subtotal</span>
+              <span>${cur}${Number(b.st || 0).toFixed(2)}</span>
+            </div>
+            ${b.dc && b.dc > 0 ? `
+              <div class="total-row" style="color: #10B981; font-weight: 600;">
+                <span>Total Discount</span>
+                <span>-${cur}${Number(b.dc).toFixed(2)}</span>
+              </div>
+            ` : ''}
+            ${b.tx && b.tx > 0 ? `
+              <div class="total-row">
+                <span>Tax (Included)</span>
+                <span>${cur}${Number(b.tx).toFixed(2)}</span>
+              </div>
+            ` : ''}
+            <div class="grand-total-row">
+              <span>Grand Total</span>
+              <span>${cur}${Number(b.gt || 0).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div class="receipt-footer">
+            ${b.f1 ? `<div>${b.f1}</div>` : ''}
+            ${b.f2 ? `<div>${b.f2}</div>` : '<div>Thank you for your visit!</div>'}
+            <div style="font-size: 10px; margin-top: 8px; color: #9CA3AF;">
+              Generated via Royal Billing • Official Digital E-Receipt
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function init() {
+      const data = parseBillData();
+      if (!data) {
+        document.getElementById('receiptContainer').innerHTML = `
+          <div class="error-card">
+            <h3>⚠️ Receipt Data Not Found</h3>
+            <p style="margin-top: 6px; font-size: 13px;">Please make sure you have scanned the full barcode link from your printed bill.</p>
+          </div>
+        `;
+        return;
+      }
+
+      currentBillData = data;
+      document.getElementById('receiptContainer').innerHTML = renderReceipt(data);
+      document.getElementById('actionsBar').style.display = 'flex';
+      document.title = `Receipt #${data.b} - ${data.s}`;
+    }
+
+    function downloadPdf() {
+      const element = document.getElementById('receiptPdf');
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: `Receipt_${currentBillData ? currentBillData.b : 'bill'}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save();
+    }
+
+    function shareWhatsApp() {
+      if (!currentBillData) return;
+      const text = encodeURIComponent(
+        `Hello! Here is your digital receipt for Invoice #${currentBillData.b} from ${currentBillData.s} for total amount ${currentBillData.cu || '₹'}${currentBillData.gt}.\n\nView E-Bill: ${window.location.href}`
+      );
+      window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
+
